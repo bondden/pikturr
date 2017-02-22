@@ -39,29 +39,29 @@
 
     internals.plant_writeRessourceClass = function (ressource, parent, subRessources, pc) {
         var s = pc;
-        s = s + 'class "' + ressource + '" <<ressource>> {\n';
+        s += 'class "' + ressource + '" <<ressource>> {\n';
         // add http_verbs as methods
-        s = s + '__ http __\n';
+        s += '__ http __\n';
         for (var v in subRessources.http_verbs) {
 
             if (!subRessources.http_verbs.hasOwnProperty(v)) continue;
 
-            s = s + v + '(';
+            s += v + '(';
             for (var param in subRessources.http_verbs[v].params) {
 
                 if (!subRessources.http_verbs[v].params.hasOwnProperty(param)) continue;
 
-                s = s + param + ',';
+                s += param + ',';
             }
             if (s[s.length - 1] == ',') {
                 s = s.slice(0, -1);
             }
-            s = s + ')\n';
+            s += ')\n';
         }
 
         // end of class
-        s = s + '}\n\n';
-        s = s + '"' + parent + '" --> "' + ressource + '"\n\n';
+        s += '}\n\n';
+        s += '"' + parent + '" --> "' + ressource + '"\n\n';
 
         for (var r in subRessources) {
             if (r == 'http_verbs') continue;
@@ -75,7 +75,7 @@
 
     internals.plant_writeApiClass = function (apiTree, pc) {
         var s = pc;
-        s = s + 'class "' + apiTree.title + '" <<api>>\n\n';
+        s += 'class "' + apiTree.title + '" <<api>>\n\n';
         return s;
     }
 
@@ -138,34 +138,116 @@
         ressourceTree.definitions = {};
         for (var d in api.definitions) {
             if (!api.definitions.hasOwnProperty(d)) continue;
-
-            ressourceTree.definitions[d] = {};
-            for (p in api.definitions[d].properties) {
-
-                if (!api.definitions[d].properties.hasOwnProperty(p)) continue;
-
-                ressourceTree.definitions[d][p] = {};
-            }
+            internals.addClassToApiData(api, ressourceTree, api.definitions[d], d);
         }
 
         cb(ressourceTree);
     }
 
+    internals.addClassToApiData = function (api, ressourceTree, cls, name) {
+        if (ressourceTree.definitions[name]) return;
+        if (cls.allOf) internals.getClassExtensionInformation(api, ressourceTree, cls, name);
+        if (cls.type !== 'object') return;
+
+        var definition = ressourceTree.definitions[name] = {
+            hasOne: [],
+            hasMany: [],
+            contains: [],
+            properties: {}
+        };
+        if (cls.extends) {
+            definition.extends = cls.extends;
+        }
+        for (var p in cls.properties) {
+
+            if (!cls.properties.hasOwnProperty(p)) continue;
+
+            let propOutput = definition.properties[p] = {};
+
+            let prop = cls.properties[p];
+            if (prop['$ref']) {
+                propOutput.type = prop['$ref'].replace('#/definitions/', '');
+                if (api.definitions[propOutput.type].type === 'object') {
+                    definition.hasOne.push({
+                        target: propOutput.type,
+                        via: p
+                    });
+                } else {
+                    propOutput.type += `<${api.definitions[propOutput.type].type}>`;
+                }
+            } else {
+                propOutput.type = prop.type;
+                switch (prop.type) {
+                case 'array':
+                    if (prop.items['$ref']) {
+                        propOutput.arrayType = prop.items['$ref'].replace('#/definitions/', '');
+                        if (api.definitions[propOutput.arrayType].type === 'object') {
+                            definition.hasMany.push({
+                                target: propOutput.arrayType,
+                                via: p
+                            });
+                        } else {
+                            propOutput.arrayType += `<${api.definitions[propOutput.arrayType].type}>`;
+                        }
+                        propOutput.type = propOutput.arrayType + '[]';
+                    }
+                    break;
+                case 'object':
+                    internals.addClassToApiData(api, ressourceTree, prop, name + '-' + p);
+                    definition.contains.push({
+                        target: name + '-' + p,
+                        via: p
+                    });
+                default:
+
+                }
+            }
+        }
+    }
+
+    internals.getClassExtensionInformation = function(api, ressourceTree, cls, name) {
+        let baseClassName = cls.allOf[0]['$ref'].replace('#/definitions/', '');
+        let baseClass = api.definitions[baseClassName];
+        if (!ressourceTree[baseClassName]) {
+            internals.addClassToApiData(api, ressourceTree, baseClass, baseClassName);
+        }
+        Object.assign(cls, baseClass, cls.allOf[1]);
+        delete cls.allOf;
+        cls.extends = baseClassName;
+    }
+
     internals.plant_writeRepresentationClasses = function (apiData, pc) {
         var s = pc;
-        s = s + 'package Representations/Messages <<Folder>> {\n';
+        s += 'package Models <<Folder>> {\n';
         for (var d in apiData.definitions) {
-            s = s + 'class "' + d + '" <<representation>> { \n';
-            s = s + '__properties__\n';
-            for (var p in apiData.definitions[d]) {
+            s += 'class "' + d + '" { \n';
+            let props = apiData.definitions[d].properties;
+            for (var p in props) {
 
-                if (!apiData.definitions[d].hasOwnProperty(p)) continue;
-                s = s + p + '\n';
+                if (!props.hasOwnProperty(p)) continue;
+                s += p + ' : ' + props[p].type + '\n';
             }
-            s = s + '}\n';
+            s += '}\n';
+
+            let hasMany = apiData.definitions[d].hasMany;
+            for (var m of hasMany) {
+                s += `"${d}" "${m.via}" -- "0..n" "${m.target}"\n`
+            }
+            let hasOne = apiData.definitions[d].hasOne;
+            for (var o of hasOne) {
+                s += `"${d}" "${o.via}" -- "1" "${o.target}"\n`
+            }
+            let contains = apiData.definitions[d].contains;
+            for (var c of contains) {
+                s += `"${c.target}" *- "${c.via}" "${d}"\n`
+            }
+            let ext = apiData.definitions[d].extends;
+            if (ext) {
+                s += `"${ext}" <|-- "${d}" : < extends\n`
+            }
         }
 
-        s = s + "}\n\n";
+        s += "}\n\n";
 
         return s;
     }
@@ -173,15 +255,15 @@
     internals.plant_writeSkinParams = function (pc) {
         var s = pc;
 
-        s = s + 'skinparam stereotypeCBackgroundColor<<representation>> DimGray\n';
-        s = s + 'skinparam stereotypeCBackgroundColor<<api>> Red\n';
-        s = s + 'skinparam stereotypeCBackgroundColor<<ressource>> SpringGreen\n';
+        s += 'skinparam stereotypeCBackgroundColor<<representation>> DimGray\n';
+        s += 'skinparam stereotypeCBackgroundColor<<api>> Red\n';
+        s += 'skinparam stereotypeCBackgroundColor<<ressource>> SpringGreen\n';
 
-        s = s + 'skinparam class {\n';
-        s = s + 'BackgroundColor<<api>> Yellow\n';
-        s = s + 'BackgroundColor<<representation>> Silver\n';
-        s = s + 'BackgroundColor<<ressource>> YellowGreen\n';
-        s = s + '}\n\n';
+        s += 'skinparam class {\n';
+        s += 'BackgroundColor<<api>> Yellow\n';
+        s += 'BackgroundColor<<representation>> Silver\n';
+        s += 'BackgroundColor<<ressource>> YellowGreen\n';
+        s += '}\n\n';
 
         return s;
     }
@@ -205,7 +287,7 @@
         s = internals.plant_writeApiClass(apiData, s);
         s = internals.plant_writeRessourceClasses(apiData, s);
         s = internals.plant_writeRepresentationClasses(apiData, s);
-        s = internals.plant_writeLegend(apiData, s);
+        // s = internals.plant_writeLegend(apiData, s);
         s = internals.plant_writeEndUml(s);
 
         var gen = plantuml.generate(s, { format: 'png' });
@@ -227,5 +309,3 @@
     }
 
 })();
-
-
