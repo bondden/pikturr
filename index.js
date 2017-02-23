@@ -144,7 +144,7 @@
         cb(ressourceTree);
     }
 
-    internals.addClassToApiData = function (api, ressourceTree, cls, name) {
+    internals.addClassToApiData = function (api, ressourceTree, cls, name, isSubObject) {
         if (ressourceTree.definitions[name]) return;
         if (cls.allOf) internals.getClassExtensionInformation(api, ressourceTree, cls, name);
         if (cls.type !== 'object') return;
@@ -153,7 +153,8 @@
             hasOne: [],
             hasMany: [],
             contains: [],
-            properties: {}
+            properties: {},
+            isSubObject: isSubObject
         };
         if (cls.extends) {
             definition.extends = cls.extends;
@@ -193,7 +194,7 @@
                     } else {
                         propOutput.arrayType = prop.items.type;
                         propOutput.type = propOutput.arrayType + '[]';
-                        internals.addClassToApiData(api, ressourceTree, prop.items, name + '-' + p);
+                        internals.addClassToApiData(api, ressourceTree, prop.items, name + '-' + p, true);
                         if (prop.items.type === 'object') {
                             definition.contains.push({
                                 target: name + '-' + p,
@@ -203,7 +204,7 @@
                     }
                     break;
                 case 'object':
-                    internals.addClassToApiData(api, ressourceTree, prop, name + '-' + p);
+                    internals.addClassToApiData(api, ressourceTree, prop, name + '-' + p, true);
                     definition.contains.push({
                         target: name + '-' + p,
                         via: p
@@ -234,7 +235,11 @@
         var s = pc;
         s += 'package Models <<Folder>> {\n';
         for (var d in apiData.definitions) {
-            s += 'class "' + d + '" { \n';
+            var className = `"${d}"`;
+            if (apiData.definitions[d].isSubObject) {
+                className = `${className} <<SubObject>>`;
+            }
+            s += `class ${className} { \n`;
             let props = apiData.definitions[d].properties;
             for (var p in props) {
 
@@ -253,7 +258,7 @@
             }
             let contains = apiData.definitions[d].contains;
             for (var c of contains) {
-                s += `"${c.target}" *- "${c.via}" "${d}"\n`
+                s += `"${c.target}" *- "${d}"\n`
             }
             let ext = apiData.definitions[d].extends;
             if (ext) {
@@ -272,11 +277,15 @@
         s += 'skinparam stereotypeCBackgroundColor<<representation>> DimGray\n';
         s += 'skinparam stereotypeCBackgroundColor<<api>> Red\n';
         s += 'skinparam stereotypeCBackgroundColor<<ressource>> SpringGreen\n';
+        s += 'skinparam stereotypeCBackgroundColor<<SubObject>> LightGray\n';
+
+        s += 'hide empty members\n';
 
         s += 'skinparam class {\n';
         s += 'BackgroundColor<<api>> Yellow\n';
         s += 'BackgroundColor<<representation>> Silver\n';
         s += 'BackgroundColor<<ressource>> YellowGreen\n';
+        s += 'BackgroundColor<<SubObject>> LightGray\n';
         s += '}\n\n';
 
         return s;
