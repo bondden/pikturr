@@ -190,6 +190,16 @@
                             propOutput.arrayType += `<${api.definitions[propOutput.arrayType].type}>`;
                         }
                         propOutput.type = propOutput.arrayType + '[]';
+                    } else {
+                        propOutput.arrayType = prop.items.type;
+                        propOutput.type = propOutput.arrayType + '[]';
+                        internals.addClassToApiData(api, ressourceTree, prop.items, name + '-' + p);
+                        if (prop.items.type === 'object') {
+                            definition.contains.push({
+                                target: name + '-' + p,
+                                via: p
+                            });
+                        }
                     }
                     break;
                 case 'object':
@@ -211,7 +221,11 @@
         if (!ressourceTree[baseClassName]) {
             internals.addClassToApiData(api, ressourceTree, baseClass, baseClassName);
         }
-        Object.assign(cls, baseClass, cls.allOf[1]);
+        Object.assign(cls, baseClass);
+        //NB starting from 1
+        for (var i = 1; i < cls.allOf.length; i++) {
+            Object.assign(cls, cls.allOf[i]);
+        }
         delete cls.allOf;
         cls.extends = baseClassName;
     }
