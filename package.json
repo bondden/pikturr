@@ -1,6 +1,6 @@
 {
   "name": "pikturr",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": true,
   "description": "Simple program to visualize a swagger api spec as an uml class diagram.",
   "keywords": [
@@ -13,11 +13,11 @@
   "license": "",
   "main": "index.js",
   "scripts": {
-    "test": "node index.js 'http://petstore.swagger.io/v2/swagger.yaml'"
+    "test": "node index.js 'http://petstore.swagger.io/v2/swagger.yaml' './tst/d/o/swagger.png' 'png' true"
   },
   "dependencies": {
     "node-plantuml": "^0.5.0",
-    "swagger-parser": "^3.3.0"
+    "swagger-parser": "^3.4.2"
   },
   "devDependencies": {}
 }
