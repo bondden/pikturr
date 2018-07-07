@@ -21,7 +21,7 @@ internals.plant_writeEndUml=function(pc){
   return pc+'@enduml\n';
 };
 
-internals.plant_writeRessourceClasses=function(apiTree,pc){
+internals.plant_writeResourceClasses=function(apiTree,pc){
 
   let 
     s            =pc,
@@ -30,7 +30,7 @@ internals.plant_writeRessourceClasses=function(apiTree,pc){
 
   for(let r in ressourceTree.ressources){
     if(ressourceTree.ressources.hasOwnProperty(r)){
-      s=internals.plant_writeRessourceClass(r,apiTree.title,ressourceTree.ressources[r],s);
+      s=internals.plant_writeResourceClass(r,apiTree.title,ressourceTree.ressources[r],s);
     }
   }
 
@@ -38,17 +38,17 @@ internals.plant_writeRessourceClasses=function(apiTree,pc){
 
 };
 
-internals.plant_writeRessourceClass=function(ressource,parent,subRessources,pc){
+internals.plant_writeResourceClass=function(ressource,parent,subRessources,pc){
   
   var s=pc;
   s+='class "'+ressource+'" <<resource>> {\n';
   // add http_verbs as methods
-  s+='__ http __\n';
+  s+='  __ http __\n';
   for(let v in subRessources.http_verbs){
 
     if(!subRessources.http_verbs.hasOwnProperty(v)) continue;
 
-    s+=v+'(';
+    s+=`  ${v}(`;
     for(let param in subRessources.http_verbs[v].params){
 
       if(!subRessources.http_verbs[v].params.hasOwnProperty(param)) continue;
@@ -68,7 +68,7 @@ internals.plant_writeRessourceClass=function(ressource,parent,subRessources,pc){
   for(let r in subRessources){
     if(r==='http_verbs') continue;
     if(subRessources.hasOwnProperty(r)){
-      s=internals.plant_writeRessourceClass(r,ressource,subRessources[r],s);
+      s=internals.plant_writeResourceClass(r,ressource,subRessources[r],s);
     }
   }
 
@@ -153,6 +153,7 @@ internals.extractApiData=function(api,cb,tgt,fmt,uml){
 };
 
 internals.addClassToApiData=function(api,ressourceTree,cls,name){
+  
   if(ressourceTree.definitions[name]) return;
   if(cls.allOf) internals.getClassExtensionInformation(api,ressourceTree,cls,name);
   if(cls.type!=='object') return;
@@ -212,6 +213,7 @@ internals.addClassToApiData=function(api,ressourceTree,cls,name){
       }
     }
   }
+  
 };
 
 internals.getClassExtensionInformation=function(api,ressourceTree,cls,name){
@@ -237,7 +239,7 @@ internals.plant_writeRepresentationClasses=function(apiData,pc){
     for(let p in props){
 
       if(!props.hasOwnProperty(p)) continue;
-      s+=p+' : '+props[p].type+'\n';
+      s+=`  ${p} : ${props[p].type}\n`;
     }
     s+='}\n';
 
@@ -293,6 +295,12 @@ skinparam {
       color<<resource>> YellowGreen
     }
   }
+  circledCharacter {
+    radius 6
+    font {
+      size 8
+    }
+  }
   stereotype {
     C {
       background {
@@ -346,7 +354,7 @@ internals.convertToPlantUml=function(apiData,tgt='output-file.png',fmt='png',uml
   s    =internals.plant_writeSkinParams(s);
   s    =internals.plant_writeTitle(apiData,s);
   s    =internals.plant_writeApiClass(apiData,s);
-  s    =internals.plant_writeRessourceClasses(apiData,s);
+  s    =internals.plant_writeResourceClasses(apiData,s);
   s    =internals.plant_writeRepresentationClasses(apiData,s);
   // s = internals.plant_writeLegend(apiData, s);
   s    =internals.plant_writeEndUml(s);
